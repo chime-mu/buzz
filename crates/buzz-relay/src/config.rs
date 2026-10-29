@@ -392,6 +392,9 @@ pub struct Config {
     /// Whether the configured web bundle serves Git browser routes in addition
     /// to the public invite landing page. Defaults to false.
     pub serve_git_web_gui: bool,
+    /// Buzz Pages: members-only static sites served from relay git repos on
+    /// `<host_prefix><community-host>`. Absent (the default) disables it.
+    pub pages: Option<crate::api::pages::PagesConfig>,
 
     /// NIP-FI federated-identity enforcement configuration.
     ///
@@ -651,6 +654,55 @@ fn inert_env_vars<'a>(names: &[&'a str], lookup: impl Fn(&str) -> Option<String>
         .copied()
         .filter(|name| lookup(name).is_some())
         .collect()
+}
+
+/// Parse `BUZZ_PAGES_*`. Pages are enabled only when
+/// `BUZZ_PAGES_HOST_PREFIX` is set; the prefix must be one DNS label plus a
+/// trailing dot (e.g. `apps.`).
+fn parse_pages_config() -> Result<Option<crate::api::pages::PagesConfig>, ConfigError> {
+    let Some(host_prefix) = std::env::var("BUZZ_PAGES_HOST_PREFIX")
+        .ok()
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+    else {
+        return Ok(None);
+    };
+    let label = host_prefix.strip_suffix('.').unwrap_or("");
+    if label.is_empty()
+        || label.len() > 63
+        || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return Err(ConfigError::InvalidValue(format!(
+            "BUZZ_PAGES_HOST_PREFIX={host_prefix:?} must be one DNS label followed by '.', e.g. \"apps.\""
+        )));
+    }
+    let session_secret = match std::env::var("BUZZ_PAGES_SESSION_SECRET") {
+        Ok(secret) if secret.len() >= 32 => secret.into_bytes(),
+        Ok(_) => {
+            return Err(ConfigError::InvalidValue(
+                "BUZZ_PAGES_SESSION_SECRET must be at least 32 characters".into(),
+            ))
+        }
+        // Dev default: sessions do not survive a restart and are not shared
+        // across replicas. Multi-replica deployments must set the secret.
+        Err(_) => {
+            tracing::warn!(
+                "BUZZ_PAGES_SESSION_SECRET is unset — using a random per-process key; \
+                 page sessions end on restart and are not shared across replicas"
+            );
+            rand::random::<[u8; 32]>().to_vec()
+        }
+    };
+    let max_file_bytes = std::env::var("BUZZ_PAGES_MAX_FILE_BYTES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(25 * 1024 * 1024);
+    tracing::info!("BUZZ_PAGES_HOST_PREFIX={host_prefix} — serving Buzz Pages");
+    Ok(Some(crate::api::pages::PagesConfig {
+        host_prefix,
+        session_secret,
+        max_file_bytes,
+    }))
 }
 
 impl Config {
@@ -1378,6 +1430,8 @@ impl Config {
             .map(|value| value == "true" || value == "1")
             .unwrap_or(false);
 
+        let pages = parse_pages_config()?;
+
         if let Some(ref dir) = web_dir {
             if !dir.join("index.html").is_file() {
                 return Err(ConfigError::InvalidValue(format!(
@@ -1486,6 +1540,7 @@ impl Config {
             admin,
             web_dir,
             serve_git_web_gui,
+            pages,
             nip_fi_provision_binding,
             nip_fi_resolver_bounds,
             nip_fi,

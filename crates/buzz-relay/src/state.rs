@@ -1299,6 +1299,8 @@ pub struct AppState {
     /// Object storage remains authoritative; this only avoids repeated reads
     /// and index generation for content-addressed packs.
     pub git_pack_cache: Arc<crate::api::git::pack_cache::GitPackCache>,
+    /// Hydrated repos kept warm for Buzz Pages requests.
+    pub pages_repo_cache: crate::api::pages::PagesRepoCache,
     /// Audio relay room manager — tracks active huddle audio rooms.
     pub audio_rooms: Arc<AudioRoomManager>,
     /// Set to `true` on SIGTERM — readiness probe returns 503.
@@ -1603,6 +1605,7 @@ impl AppState {
             )),
             git_store,
             git_pack_cache,
+            pages_repo_cache: crate::api::pages::PagesRepoCache::default(),
             audio_rooms: Arc::new(AudioRoomManager::new()),
             shutting_down: Arc::new(AtomicBool::new(false)),
             dependency_diagnostics: Arc::new(crate::readiness::DependencyDiagnostics::default()),

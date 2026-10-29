@@ -72,6 +72,10 @@ pub struct RelayInfo {
     /// provider-agnostic; provider credentials remain server-side.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gif: Option<GifDescriptor>,
+    /// Buzz Pages: members-only static sites served from relay git repos.
+    /// Present only when `BUZZ_PAGES_HOST_PREFIX` is configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pages: Option<PagesDescriptor>,
     /// Relay's own signing pubkey (NIP-11 `self` field, NIP-43).
     #[serde(rename = "self", skip_serializing_if = "Option::is_none")]
     pub relay_self: Option<String>,
@@ -108,6 +112,15 @@ pub struct GifDescriptor {
     pub search: String,
     /// Relay-relative authenticated share-reporting endpoint.
     pub share: String,
+}
+
+/// Public capability descriptor for Buzz Pages.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PagesDescriptor {
+    /// Site hosts are `<repo>--<owner16>.<host_prefix><community-host>`.
+    pub host_prefix: String,
+    /// Site-relative path that exchanges a NIP-98 token for a session.
+    pub login_path: String,
 }
 
 /// Protocol and resource limits advertised in the NIP-11 document.
@@ -308,6 +321,7 @@ impl RelayInfo {
             pairing_relay_url: pairing_relay_url.map(str::to_string),
             admin_api: admin_api.map(str::to_string),
             gif,
+            pages: None,
             relay_self: relay_self.map(|s| s.to_string()),
             federated_identity,
         }
@@ -409,6 +423,15 @@ pub(crate) async fn nip11_document(state: &crate::state::AppState, raw_host: &st
             "max_events": buzz_db::read_state::MAX_SNAPSHOT_EVENTS,
             "max_event_array_bytes": buzz_db::read_state::MAX_SNAPSHOT_BYTES,
         }));
+    }
+    if let Some(pages) = state.config.pages.as_ref() {
+        info.supported_extensions
+            .get_or_insert_default()
+            .push("buzz-pages".to_string());
+        info.pages = Some(PagesDescriptor {
+            host_prefix: pages.host_prefix.clone(),
+            login_path: crate::api::pages::LOGIN_PATH.to_string(),
+        });
     }
     let tenant_host = if state.config.push_enabled {
         crate::tenant::bind_community(&state.db, raw_host)

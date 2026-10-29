@@ -490,6 +490,12 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             state.clone(),
             nip_fi_assertion_guard,
         ))
+        // Outside the relay's own guards: pages-host requests never reach
+        // relay routes, and relay-host requests pass straight through.
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            api::pages::pages_host_dispatch,
+        ))
         .layer(middleware::from_fn(track_metrics))
         .layer(http_trace_layer())
         .layer(build_cors_layer(&state.config.cors_origins))

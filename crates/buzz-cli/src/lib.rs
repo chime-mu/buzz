@@ -320,6 +320,9 @@ enum Cmd {
     /// Upload files to the relay's Blossom store
     #[command(subcommand)]
     Upload(UploadCmd),
+    /// Buzz Pages — members-only web apps served from relay git repos
+    #[command(subcommand)]
+    Pages(PagesCmd),
     /// Agent engram management — persistent memory per NIP-AE
     #[command(subcommand)]
     Mem(MemCmd),
@@ -1962,6 +1965,28 @@ pub enum IssuesCmd {
 }
 
 #[derive(Subcommand)]
+pub enum PagesCmd {
+    /// Print a short-lived login link for a Buzz Pages site (valid 60 seconds)
+    #[command(
+        after_help = "Example:\n  buzz pages link --repo-owner <hex> --repo-id dashboard\n\nEach site has its own origin: <repo>--<owner16>.apps.<relay-host>.\nIt is served from the repo's `pages` branch, or its default branch.\nOnly members of the repo's bound channel can view it."
+    )]
+    Link {
+        /// Repository owner pubkey (hex)
+        #[arg(long)]
+        repo_owner: String,
+        /// Repository id (the NIP-34 `d` tag)
+        #[arg(long)]
+        repo_id: String,
+        /// Path inside the site to open after login
+        #[arg(long, default_value = "")]
+        path: String,
+        /// Host label the relay serves pages on (`BUZZ_PAGES_HOST_PREFIX`)
+        #[arg(long, default_value = "apps.")]
+        host_prefix: String,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum UploadCmd {
     /// Upload a file to the relay's Blossom store
     File {
@@ -2281,6 +2306,7 @@ async fn run(cli: Cli) -> Result<(), CliError> {
         Cmd::Pr(sub) => commands::pr::dispatch(sub, &client).await,
         Cmd::Media(sub) => commands::upload::dispatch_media(sub, &client).await,
         Cmd::Upload(sub) => commands::upload::dispatch(sub, &client).await,
+        Cmd::Pages(sub) => commands::pages::dispatch(sub, &client).await,
         Cmd::Mem(sub) => commands::mem::dispatch(sub, &client).await,
         Cmd::Moderation(sub) => commands::moderation::dispatch(sub, &client, &cli.format).await,
         Cmd::Pack(_) => unreachable!("handled above"),
@@ -2466,6 +2492,7 @@ mod tests {
             "moderation",
             "notes",
             "pack",
+            "pages",
             "patches",
             "pr",
             "projects",
@@ -2647,6 +2674,7 @@ mod tests {
         );
         assert_eq!(names(&cmd, "media"), vec!["get"]);
         assert_eq!(names(&cmd, "upload"), vec!["file"]);
+        assert_eq!(names(&cmd, "pages"), vec!["link"]);
         assert_eq!(names(&cmd, "pack"), vec!["inspect", "validate"]);
         assert_eq!(
             names(&cmd, "moderation"),
@@ -2676,6 +2704,7 @@ mod tests {
             ("media", 1),
             ("messages", 8),
             ("pack", 2),
+            ("pages", 1),
             ("patches", 4),
             ("pr", 5),
             ("projects", 8),
