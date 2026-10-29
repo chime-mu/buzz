@@ -228,6 +228,8 @@ type E2eConfig = {
     projectRepoSnapshotError?: string;
     /** Delay remote repository snapshots so project loading UI is observable. */
     projectRepoSnapshotDelayMs?: number;
+    /** Extra paths appended to remote repository snapshots (e.g. a site's `index.html`). */
+    projectRepoSnapshotExtraFiles?: string[];
     /** Builderlab account returned by hosted-community onboarding. Null/omitted = signed out. */
     builderlabAuth?: {
       email?: string;
@@ -13105,6 +13107,14 @@ export function maybeInstallE2eTauriMocks() {
               preview_content:
                 "// Smart HTTP git transport\n// Handles upload-pack and receive-pack for Buzz git repos.\n",
             },
+            ...(activeConfig?.mock?.projectRepoSnapshotExtraFiles ?? []).map(
+              (path) => ({
+                path,
+                kind: "blob",
+                size: 1024,
+                preview_content: null,
+              }),
+            ),
           ],
         };
       case "get_project_local_repo_snapshot":

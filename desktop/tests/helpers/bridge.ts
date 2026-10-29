@@ -155,6 +155,8 @@ type MockBridgeOptions = {
   };
   /** Native picker boundary result for Pocket voice import tests. */
   pocketVoiceImportResult?: "success" | "cancel" | "invalid";
+  /** Extra paths appended to remote repository snapshots (e.g. a site's `index.html`). */
+  projectRepoSnapshotExtraFiles?: string[];
   /** Advertised HEAD for the first mock project without adding that branch. */
   projectHeadBranch?: string;
   /** Relay NIP-11 identity used to sign authoritative repository state. */
