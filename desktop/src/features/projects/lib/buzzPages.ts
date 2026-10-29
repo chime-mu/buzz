@@ -63,26 +63,34 @@ export function pagesSiteOrigin(
   ) {
     return null;
   }
+  const label = `${repoId}--${owner.slice(0, OWNER_PREFIX_LEN)}`;
+  // `--` at positions 3–4 is reserved for IDNA; CAs refuse such labels.
+  if (label.slice(2, 4) === "--") return null;
   try {
     const relay = new URL(relayOrigin);
     const scheme =
       relay.protocol === "https:" || relay.protocol === "wss:"
         ? "https:"
         : "http:";
-    return `${scheme}//${repoId}--${owner.slice(0, OWNER_PREFIX_LEN)}.${hostPrefix}${relay.host}`;
+    return `${scheme}//${label}.${hostPrefix}${relay.host}`;
   } catch {
     return null;
   }
 }
 
-/** Whether a repository looks like it publishes a site. */
+/**
+ * Whether a repository looks like it publishes a site. The relay serves the
+ * `pages` branch, else the default branch, so `files` only count when they
+ * are the default branch's.
+ */
 export function repositoryPublishesSite(
   branchOptions: readonly string[],
   files: readonly { path: string }[],
+  viewingDefaultBranch: boolean,
 ): boolean {
   return (
     branchOptions.includes("pages") ||
-    files.some((file) => file.path === "index.html")
+    (viewingDefaultBranch && files.some((file) => file.path === "index.html"))
   );
 }
 

@@ -201,7 +201,11 @@ export function ProjectRepositoryActionsPanel({
   const openAppAction =
     branchScoped &&
     openPagesApp &&
-    repositoryPublishesSite(sourceControls.branchOptions, files)
+    repositoryPublishesSite(
+      sourceControls.branchOptions,
+      files,
+      sourceControls.branch === repository.defaultBranch,
+    )
       ? openPagesApp
       : undefined;
   const showCreateTask = activeTab === "issues" && !selectionPresentation;

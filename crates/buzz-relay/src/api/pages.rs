@@ -173,22 +173,8 @@ pub async fn pages_host_dispatch(
         .get(header::HOST)
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
-    if req.uri().path() == TLS_ASK_PATH {
-        // The TLS terminator asks over the internal network (e.g. `relay:3000`).
-        // Public hosts — communities and sites — never answer, so the internet
-        // cannot use it to probe which sites exist.
-        let public = match raw_host.as_deref() {
-            Some(host) => {
-                classify_host(&config.host_prefix, host).is_some()
-                    || crate::tenant::bind_community(&state.db, host)
-                        .await
-                        .is_ok()
-            }
-            None => false,
-        };
-        if !public {
-            return tls_ask(&state, config, req.uri().query()).await;
-        }
+    if req.uri().path() == TLS_ASK_PATH && raw_host.as_deref().is_some_and(is_internal_host) {
+        return tls_ask(&state, config, req.uri().query()).await;
     }
     let Some(raw_host) = raw_host else {
         return next.run(req).await;
@@ -324,11 +310,27 @@ async fn relay_checks(
     .await
 }
 
+/// Whether `host` (a Host header) names a service on the internal network,
+/// e.g. `relay:3000` as the TLS terminator calls it. Public names always
+/// contain a dot, so tls-ask stays unreachable through the public proxy.
+fn is_internal_host(host: &str) -> bool {
+    let name = host.rsplit_once(':').map_or(host, |(name, _)| name);
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
 // ── Site addressing ─────────────────────────────────────────────────────────
 
 /// Split a site label into `(repo, owner_prefix)`. Repo ids must be DNS-safe:
-/// lowercase letters, digits and `-`, not starting or ending with `-`.
+/// lowercase letters, digits and `-`, not starting or ending with `-`. Labels
+/// with `--` at positions 3–4 are reserved for IDNA (`xn--`), and CAs refuse
+/// certificates for them, so 2-character repo ids cannot be sites.
 fn parse_label(label: &str) -> Option<(&str, &str)> {
+    if label.get(2..4) == Some(LABEL_SEPARATOR) {
+        return None;
+    }
     let (repo, owner_prefix) = label.rsplit_once(LABEL_SEPARATOR)?;
     let repo_ok = !repo.is_empty()
         && !repo.starts_with('-')
@@ -989,8 +991,29 @@ mod tests {
             "Team--0123456789abcdef",
             "x--0123456789ABCDEF",
             "x--0123456789abcdeg",
+            "ui--0123456789abcdef",
+            "ab--x--0123456789abcdef",
         ] {
             assert_eq!(parse_label(bad), None, "{bad} must be rejected");
+        }
+    }
+
+    #[test]
+    fn tls_ask_is_internal_only() {
+        for host in ["relay:3000", "relay", "buzz-relay_1:3000", "localhost:3000"] {
+            assert!(is_internal_host(host), "{host} is internal");
+        }
+        for host in [
+            "",
+            ":3000",
+            "buzz.mu.dk",
+            "buzz.mu.dk:1",
+            "buzz.mu.dk:",
+            "x--0123456789abcdef.apps.buzz.mu.dk",
+            "127.0.0.1:3000",
+            "[::1]:3000",
+        ] {
+            assert!(!is_internal_host(host), "{host} is public");
         }
     }
 

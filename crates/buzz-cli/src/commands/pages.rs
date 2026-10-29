@@ -65,9 +65,11 @@ fn site_origin(
         && repo_id
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
-    if !repo_ok {
+    let label = format!("{repo_id}{LABEL_SEPARATOR}{}", &repo_owner[..OWNER_PREFIX_LEN]);
+    // `--` at positions 3–4 is reserved for IDNA; CAs refuse such labels.
+    if !repo_ok || label.get(2..4) == Some(LABEL_SEPARATOR) {
         return Err(CliError::Usage(format!(
-            "repo id {repo_id:?} cannot be a Buzz Pages site: use lowercase letters, digits and '-' (max 45)"
+            "repo id {repo_id:?} cannot be a Buzz Pages site: use 3+ lowercase letters, digits and '-' (max 45), without '--' as characters 3-4"
         )));
     }
     let (scheme, rest) = relay_url
@@ -83,10 +85,7 @@ fn site_origin(
     } else {
         format!("{host_prefix}.")
     };
-    Ok(format!(
-        "{scheme}://{repo_id}{LABEL_SEPARATOR}{}.{prefix}{authority}",
-        &repo_owner[..OWNER_PREFIX_LEN]
-    ))
+    Ok(format!("{scheme}://{label}.{prefix}{authority}"))
 }
 
 /// Build a site login URL carrying a NIP-98 event signed for the site's
@@ -126,7 +125,7 @@ mod tests {
             site_origin("ws://localhost:3000", "apps.", OWNER, "x").expect("origin"),
             "http://x--fabe1ffc0a550dcb.apps.localhost:3000"
         );
-        for bad_repo in ["Team", "team_dash", "-x", "x-", "a.b", ""] {
+        for bad_repo in ["Team", "team_dash", "-x", "x-", "a.b", "", "ui", "ab--x"] {
             assert!(site_origin("https://b.example", "apps.", OWNER, bad_repo).is_err());
         }
         assert!(site_origin("https://b.example", "apps.", "ABC", "x").is_err());

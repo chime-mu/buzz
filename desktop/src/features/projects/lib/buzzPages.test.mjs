@@ -52,6 +52,8 @@ test("builds one origin per repository, matching the relay", () => {
     "a.b",
     "",
     "a".repeat(46),
+    "ui",
+    "ab--x",
   ]) {
     assert.equal(
       pagesSiteOrigin("https://b.example", "apps.", OWNER, repo),
@@ -62,13 +64,13 @@ test("builds one origin per repository, matching the relay", () => {
 });
 
 test("detects repositories that publish a site", () => {
-  assert.equal(repositoryPublishesSite(["main", "pages"], []), true);
+  const index = [{ path: "index.html" }];
+  assert.equal(repositoryPublishesSite(["main", "pages"], [], false), true);
+  assert.equal(repositoryPublishesSite(["main"], index, true), true);
+  // The relay serves the default branch, not the one being viewed.
+  assert.equal(repositoryPublishesSite(["main", "feat"], index, false), false);
   assert.equal(
-    repositoryPublishesSite(["main"], [{ path: "index.html" }]),
-    true,
-  );
-  assert.equal(
-    repositoryPublishesSite(["main"], [{ path: "docs/index.html" }]),
+    repositoryPublishesSite(["main"], [{ path: "docs/index.html" }], true),
     false,
   );
 });
