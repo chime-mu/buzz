@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   CheckCircle2,
   CircleDot,
   DownloadCloud,
@@ -27,6 +28,7 @@ import type {
   ProjectRepoSnapshot,
   Repository,
 } from "@/features/projects/hooks";
+import { repositoryPublishesSite } from "@/features/projects/lib/buzzPages";
 import { projectExternalRefUrl } from "@/features/projects/lib/projectExternalUrl";
 import {
   type ProjectSelectionItem,
@@ -52,6 +54,7 @@ import {
   projectTaskActivity,
 } from "./projectRightPanelContext";
 import { PROJECT_CONTEXT_ACTION_BUTTON_CLASS } from "./projectContextActionStyles";
+import { useOpenBuzzPagesApp } from "./useOpenBuzzPagesApp";
 
 type ProjectRepositoryActionsPanelProps = {
   activeTab: string;
@@ -192,6 +195,15 @@ export function ProjectRepositoryActionsPanel({
     sourceControls.externalUrl,
     branchScoped ? (sourceControls.selectedTag ?? sourceControls.branch) : null,
   );
+  const openPagesApp = useOpenBuzzPagesApp(
+    sourceControls.remoteKind === "buzz" ? repository : null,
+  );
+  const openAppAction =
+    branchScoped &&
+    openPagesApp &&
+    repositoryPublishesSite(sourceControls.branchOptions, files)
+      ? openPagesApp
+      : undefined;
   const showCreateTask = activeTab === "issues" && !selectionPresentation;
   const showCreateReview =
     activeTab === "prs" &&
@@ -388,6 +400,15 @@ export function ProjectRepositoryActionsPanel({
                         <SquareTerminal className="h-3.5 w-3.5" />
                         Terminal
                       </RepositoryActionButton>
+                      {openAppAction ? (
+                        <RepositoryActionButton
+                          onClick={() => void openAppAction()}
+                          title="Open this repository’s Buzz Pages app in your browser"
+                        >
+                          <AppWindow className="h-3.5 w-3.5" />
+                          Open app
+                        </RepositoryActionButton>
+                      ) : null}
                       {sourceControls.source === "local" ? (
                         <RepositoryActionButton
                           onClick={onOpenLocalRepository}
